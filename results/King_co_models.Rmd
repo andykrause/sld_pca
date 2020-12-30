@@ -1,0 +1,107 @@
+---
+title: "SLDPCA and Residential Markets"
+subtitle: 'King County, WA Analysis'
+author: "Andy Krause"
+date: "12/29/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(knitr.table.format = "html") 
+```
+
+```{r, echo=FALSE, }
+   setwd('..')
+   # Read in Data
+   summary_df <- readRDS(file.path(getwd(), paste0('summary.rds')))
+   int_df <- readRDS(file.path(getwd(), paste0('interpretability.rds')))
+
+```
+## What I Did
+
+* Ran a host of models on King County home sales from 2017 to end of 2019
+    * Linear and Random Forest Models
+    * Variety of different specifications aimed at teasing out the marginal contribution of the SLD variables
+* Extracted measures of impact from each variable in each model
+    * Linear = coefficient values
+    * Random Forest = Partial Dependency analysis on each SLD variable
+* Summarized model performance
+    * Model Fit (adj R-squared)
+    * Predictive Ability: Median Absolute Percent Error (MdAPE)
+            * Out-of-time prediction on last month in the data
+    * Spatial Autocorrelation of Errors (SPAC): Moran's I Statistic, lower is better
+    * Predictive Ability of Sales Near Submarket Boundary (Border MdAPE)
+    
+## Interpreting the SLD Impact
+
+The plot below shows the impact (in % terms) of each of the SLD variables in four different model specifications:
+
+* Linear (Blue) vs Random Forest (Orange)
+* SLD as only spatial variable (Solid Line) vs SLD with X,Y and Submarket Fixed Effects (Dashed)
+
+Broad takeaways:
+
+* SLDs 1, 2 and 4 are positive, 3 and 5 negative
+* The magitude of the impacts are greatly reduced when other spatial control features are added, but still remain (other than SLD 4)
+* Linear and Random Forest models show similar directionality in all cases and roughly similar magnitude for all SLD variables except SLD 2 where the linear model suggests a much larger impact than the random forest models.
+* SLDs 1, 3 and 5 show an 'S' curve in the random forest impacts suggesting that even with the standardization the linear model is missing some variation across the spectrum of SLD variable values. 
+
+
+```{r, echo = FALSE}
+
+ int_df <- int_df %>%
+  dplyr::mutate(sld_var = gsub('sld', 'SLD ', sld_var))
+
+ ggplot(int_df, aes(x = var_stds, y= value, color = model, linetype = spec)) +
+    facet_wrap(~sld_var) +
+    geom_line() +
+    scale_color_manual(name = 'Model Type',
+                       values = c('blue', 'orange'),
+                       labels = c('Linear', 'Random Forest')) +
+    scale_linetype_manual(name = 'Model Specification',
+                          values = c(2,1),
+                          labels = c('All Spatial', 'SLD Only')) +
+    xlab('\nSLD Variable Value (Normalized)') +
+    ylab('Impact on Value (%)\n') +
+    theme(legend.position = 'bottom')
+
+```
+
+
+```{r, echo = FALSE, warning = FALSE}
+
+  summary_df <- summary_df %>%
+  dplyr::mutate(fit = round(fit, 3),
+                spac = round(spac, 1),
+                border_mdape = round(border_mdape, 3))
+ 
+  summary_tbl <- summary_df %>%
+    dplyr::select(-model) %>%
+    knitr::kable(.) %>%
+    kableExtra::kable_styling(bootstrap_options = c("striped", "hover"), full_width = F) %>%
+    kableExtra::pack_rows("Linear Model", 1, 7) %>%
+    kableExtra::pack_rows("Random Forest", 8, 14)
+
+
+```
+
+### Model Performance
+
+Next, I looked at how well the SLD features helped a variety of model performance indicators. 
+
+Key takeaways:
+
+* Model fit and predictive abilty are highly correlated, will just talk about predictions
+* SLD variables don't add much to model performance in linear model
+* Impacts of SLD variables on model performance much more significant in random forest model
+* Submarket fixed effects are hard to beat in a linear model
+* Submarket fixed effects are much less effective than X,Y coordinates and/or SLD variables in random forest
+* All model show significant spatial autocorrelation
+* Analysis of Border properties is inconclusive...needs a bit more work here. 
+
+```{r, echo=FALSE}
+  summary_tbl
+```
+
+
