@@ -32,7 +32,14 @@ options(knitr.table.format = "html")
             * Out-of-time prediction on last month in the data
     * Spatial Autocorrelation of Errors (SPAC): Moran's I Statistic, lower is better
     * Predictive Ability of Sales Near Submarket Boundary (Border MdAPE)
-    
+##
+
+```{r data}
+
+
+
+
+```
 ## Interpreting the SLD Impact
 
 The plot below shows the impact (in % terms) of each of the SLD variables in four different model specifications:
@@ -47,6 +54,23 @@ Broad takeaways:
 * Linear and Random Forest models show similar directionality in all cases and roughly similar magnitude for all SLD variables except SLD 2 where the linear model suggests a much larger impact than the random forest models.
 * SLDs 1, 3 and 5 show an 'S' curve in the random forest impacts suggesting that even with the standardization the linear model is missing some variation across the spectrum of SLD variable values. 
 
+```{r, echo = FALSE}
+
+ intx_df <- int_df %>%
+  dplyr::filter(spec == 'sld-only') %>%
+  dplyr::mutate(sld_var = gsub('sld', 'SLD ', sld_var))
+
+ ggplot(intx_df, aes(x = var_stds, y= value, color = model)) +
+    facet_wrap(~sld_var) +
+    geom_line() +
+    scale_color_manual(name = 'Model Type',
+                       values = c('blue', 'orange'),
+                       labels = c('Linear', 'Random Forest')) +
+    xlab('\nSLD Variable Value (Normalized)') +
+    ylab('Impact on Value (%)\n') +
+    theme(legend.position = 'bottom')
+
+```
 
 ```{r, echo = FALSE}
 
@@ -102,6 +126,16 @@ Key takeaways:
 
 ```{r, echo=FALSE}
   summary_tbl
+```
+
+```{r}
+
+  mdape_tbl <- summary_df %>%
+  dplyr::select(model, spec, mdape) %>%
+  dplyr::mutate(model = ifelse(model == 'rf', 'Random Forest', 'OLS')) %>%
+  tidyr::pivot_wider(names_from = 'model', id_cols = 'spec', values_from = 'mdape') 
+
+
 ```
 
 

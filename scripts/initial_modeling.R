@@ -11,6 +11,7 @@
    library(tidyverse)
    require(sf)
    library(sp)
+   library(magrittr)
 
    # Read in Data
    sales_df <- readRDS(file.path(getwd(), paste0('all_sales.rds')))
@@ -71,17 +72,11 @@ assignBorder <- function(validate_df,
                   subm_lm_error = round(log(subm_lm) - log(price), 3))
 
   # Add Lat/Long
-  xy_lm <- lm(update(lm_spec, . ~ . + latitude + longitude + latitude:longitude), data = train_df)
+  xy_lm <- lm(update(lm_spec, . ~ . + latitude + longitude + latitude:longitude +
+                       I(latitude ^ 2)+ I(longitude ^2)), data = train_df)
   validate_df <- validate_df %>%
     dplyr::mutate(xy_lm = exp(predict(xy_lm, .)),
                   xy_lm_error = round(log(xy_lm) - log(price), 3))
-
-
-  # Add SLD
-  sld1_lm <- lm(update(lm_spec, . ~ . + SLD_1), data = train_df)
-  validate_df <- validate_df %>%
-    dplyr::mutate(sld1_lm = exp(predict(sld1_lm, .)),
-                  sld1_lm_error = round(log(sld1_lm) - log(price), 3))
 
   # Add all SLD
   sld_lm <- lm(update(lm_spec, . ~ . + SLD_1 + SLD_2 + SLD_3 + SLD_4 + SLD_5), data = train_df)
@@ -99,7 +94,8 @@ assignBorder <- function(validate_df,
 
   # SLD + Subm
   sldxy_lm <- lm(update(lm_spec, . ~ . + SLD_1 + SLD_2 + SLD_3 + SLD_4 + SLD_5 +
-                          + latitude + longitude + latitude:longitude), data = train_df)
+                          + latitude + longitude + latitude:longitude +
+                          I(latitude ^ 2)+ I(longitude ^2)), data = train_df)
   validate_df <- validate_df %>%
     dplyr::mutate(sldxy_lm = exp(predict(sldxy_lm, .)),
                   sldxy_lm_error = round(log(sldxy_lm) - log(price), 3))
@@ -107,7 +103,8 @@ assignBorder <- function(validate_df,
 
   # All
   all_lm <- lm(update(lm_spec, . ~ . + SLD_1 + SLD_2 + SLD_3 + SLD_4 + SLD_5 +
-                          + latitude + longitude + latitude:longitude + as.factor(submarket)),
+                          + latitude + longitude + latitude:longitude +
+                        I(latitude ^ 2)+ I(longitude ^2) + as.factor(submarket)),
                data = train_df)
   validate_df <- validate_df %>%
     dplyr::mutate(all_lm = exp(predict(all_lm, .)),
@@ -241,6 +238,20 @@ assignBorder <- function(validate_df,
                                     median(abs(validate_df$slds_rf_error)),
                                     median(abs(validate_df$sldxy_rf_error)),
                                     median(abs(validate_df$all_rf_error))),
+                          mdpe = c(median(validate_df$base_lm_error),
+                                    median(validate_df$subm_lm_error),
+                                    median(validate_df$xy_lm_error),
+                                    median(validate_df$sld_lm_error),
+                                    median(validate_df$slds_lm_error),
+                                    median(validate_df$sldxy_lm_error),
+                                    median(validate_df$all_lm_error),
+                                    median(validate_df$base_rf_error),
+                                    median(validate_df$subm_rf_error),
+                                    median(validate_df$xy_rf_error),
+                                    median(validate_df$sld_rf_error),
+                                    median(validate_df$slds_rf_error),
+                                    median(validate_df$sldxy_rf_error),
+                                    median(validate_df$all_rf_error)),
                           spac = c(spac_$base_lm_error$statistic,
                                    spac_$subm_lm_error$statistic,
                                    spac_$xy_lm_error$statistic,
@@ -416,3 +427,9 @@ sldLMEval <- function(train_df,
                             spac = spac$statistic),
        int = lm_obj$coefficients)
 }
+
+  ### Summary of Data ------------
+
+  
+  
+  
