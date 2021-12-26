@@ -101,11 +101,26 @@ Broad takeaways:
                 border_mdape = round(border_mdape, 3))
  
   summary_tbl <- summary_df %>%
-    dplyr::select(-model) %>%
+    dplyr::select(-c(model, spac, border_mdape)) %>%
+    dplyr::select(Specification = spec, R2 = fit, Accuracy = mdape,
+                  Bias = mdpe) %>%
     knitr::kable(.) %>%
     kableExtra::kable_styling(bootstrap_options = c("striped", "hover"), full_width = F) %>%
     kableExtra::pack_rows("Linear Model", 1, 7) %>%
     kableExtra::pack_rows("Random Forest", 8, 14)
+  
+  summary_df %>% 
+    dplyr::select(spec, mdape, model) %>%
+    tidyr::pivot_wider(names_from = model, values_from = mdape) %>%
+    dplyr::mutate(spec = c("Aspatial", "Submarkets", "Lat/Long", "PCA-only", 
+                           "PCA + Submarkets", "PCA + Lat/Long", "PCA + Lat/Long + Subm")) %>%
+    dplyr::select(Specification = spec, `Linear (OLS)` = linear, RandomForest = rf) %>%
+    knitr::kable(.) %>%
+    kableExtra::kable_styling(bootstrap_options = c("striped", "hover"), full_width = F) %>%
+    kableExtra::pack_rows("Standard Approach", 1, 3) %>%
+    kableExtra::pack_rows("PCA Variables", 4, 7) -> x
+ 
+  
 
 
 ```
