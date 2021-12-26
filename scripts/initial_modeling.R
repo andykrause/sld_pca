@@ -25,32 +25,14 @@
    val_periods <- 1
    train_df <- x_df %>%
      dplyr::filter(trans_period <= max(x_df$trans_period) - val_periods)
+   
    validate_df <- x_df %>%
      dplyr::filter(trans_period > max(x_df$trans_period) - val_periods) %>%
      dplyr::mutate(trans_period = max(train_df$trans_period))
 
-assignBorder <- function(validate_df,
-                         k = 5){
 
-   # Identify "Border" properties
-   coords <- cbind(validate_df$longitude, validate_df$latitude)
-   sp_df = SpatialPointsDataFrame(SpatialPoints(coords), validate_df)
-   nbl <- sp_df %>%
-     spdep::knearneigh(., k = 5, longlat = NULL, RANN=TRUE) %>%
-     spdep::knn2nb(.)
-
-   validate_df$border <- FALSE
-   for (i in 1:nrow(validate_df)){
-     nbls <- validate_df$submarket[nbl[[i]]]
-     if (length(which(nbls != validate_df$submarket[i])) > 0){
-       validate_df$border[i] <- TRUE
-     }
-   }
-  validate_df
-}
-
-  train_df <- assignBorder(train_df, k = 5)
-  validate_df <- assignBorder(validate_df, k = 5)
+  train_df <- assignBorder(train_df, k = 10)
+  validate_df <- assignBorder(validate_df, k = 10)
 
 ### Linear Modeling --------------------------------------------------------------------------------
 
@@ -78,14 +60,22 @@ assignBorder <- function(validate_df,
     dplyr::mutate(xy_lm = exp(predict(xy_lm, .)),
                   xy_lm_error = round(log(xy_lm) - log(price), 3))
 
-  # Add all SLD
-  sld_lm <- lm(update(lm_spec, . ~ . + SLD_1 + SLD_2 + SLD_3 + SLD_4 + SLD_5), data = train_df)
+  # Add 2 SLD
+  sld2_lm <- lm(update(lm_spec, . ~ . + SLD_1 + SLD_2), data = train_df)
   validate_df <- validate_df %>%
-    dplyr::mutate(sld_lm = exp(predict(sld_lm, .)),
-                  sld_lm_error = round(log(sld_lm) - log(price), 3))
+    dplyr::mutate(sld2_lm = exp(predict(sld2_lm, .)),
+                  sld2_lm_error = round(log(sld2_lm) - log(price), 3))
 
+  # Add 5 SLD
+  sld5_lm <- lm(update(lm_spec, . ~ . + SLD_1 + SLD_2 + SLD_3 + SLD_4 + SLD_5), 
+                data = train_df)
+  validate_df <- validate_df %>%
+    dplyr::mutate(sld5_lm = exp(predict(sld5_lm, .)),
+                  sld5_lm_error = round(log(sld5_lm) - log(price), 3))
+  
+  
   # SLD + Subm
-  slds_lm <- lm(update(lm_spec, . ~ . + SLD_1 + SLD_2 + SLD_3 + SLD_4 + SLD_5 +
+  slds_lm <- lm(update(lm_spec, . ~ . + SLD_1 + SLD_2 +
                          as.factor(submarket)), data = train_df)
   validate_df <- validate_df %>%
     dplyr::mutate(slds_lm = exp(predict(slds_lm, .)),
@@ -93,7 +83,7 @@ assignBorder <- function(validate_df,
 
 
   # SLD + Subm
-  sldxy_lm <- lm(update(lm_spec, . ~ . + SLD_1 + SLD_2 + SLD_3 + SLD_4 + SLD_5 +
+  sldxy_lm <- lm(update(lm_spec, . ~ . + SLD_1 + SLD_2 +
                           + latitude + longitude + latitude:longitude +
                           I(latitude ^ 2)+ I(longitude ^2)), data = train_df)
   validate_df <- validate_df %>%
@@ -102,7 +92,7 @@ assignBorder <- function(validate_df,
 
 
   # All
-  all_lm <- lm(update(lm_spec, . ~ . + SLD_1 + SLD_2 + SLD_3 + SLD_4 + SLD_5 +
+  all_lm <- lm(update(lm_spec, . ~ . + SLD_1 + SLD_2 +
                           + latitude + longitude + latitude:longitude +
                         I(latitude ^ 2)+ I(longitude ^2) + as.factor(submarket)),
                data = train_df)
@@ -149,16 +139,25 @@ assignBorder <- function(validate_df,
     dplyr::mutate(xy_rf = exp(predict(xy_rf, .)$predictions),
                   xy_rf_error = round(log(xy_rf) - log(price), 3))
 
-  sld_rf <- ranger::ranger(update(rf_spec, . ~ . + SLD_1 + SLD_2 + SLD_3 + SLD_4 + SLD_5),
+  sld2_rf <- ranger::ranger(update(rf_spec, . ~ . + SLD_1 + SLD_2),
                             data = train_df,
                             num.trees = ntrees,
                             min.node.size = min_node_size)
   validate_df <- validate_df %>%
-    dplyr::mutate(sld_rf = exp(predict(sld_rf, .)$predictions),
-                  sld_rf_error = round(log(sld_rf) - log(price), 3))
+    dplyr::mutate(sld2_rf = exp(predict(sld2_rf, .)$predictions),
+                  sld2_rf_error = round(log(sld2_rf) - log(price), 3))
 
+  sld5_rf <- ranger::ranger(update(rf_spec, . ~ . + SLD_1 + SLD_2 + SLD_3 + 
+                              SLD_4 + SLD_5),
+                            data = train_df,
+                            num.trees = ntrees,
+                            min.node.size = min_node_size)
+  validate_df <- validate_df %>%
+    dplyr::mutate(sld5_rf = exp(predict(sld5_rf, .)$predictions),
+                  sld5_rf_error = round(log(sld5_rf) - log(price), 3))
+  
   # SLD + Subm
-  slds_rf <- ranger::ranger(update(rf_spec, . ~ . + SLD_1 + SLD_2 + SLD_3 + SLD_4 + SLD_5 +
+  slds_rf <- ranger::ranger(update(rf_spec, . ~ . + SLD_1 + SLD_2 +
                             submarket),
                             data = train_df,
                             num.trees = ntrees,
@@ -169,7 +168,7 @@ assignBorder <- function(validate_df,
 
 
   # SLD + LL
-  sldxy_rf <- ranger::ranger(update(rf_spec, . ~ . + SLD_1 + SLD_2 + SLD_3 + SLD_4 + SLD_5 +
+  sldxy_rf <- ranger::ranger(update(rf_spec, . ~ . + SLD_1 + SLD_2 +
                                      latitude + longitude),
                              data = train_df,
                              num.trees = ntrees,
@@ -179,7 +178,7 @@ assignBorder <- function(validate_df,
                   sldxy_rf_error = round(log(sldxy_rf) - log(price), 3))
 
   # SLD + LL
-  all_rf <- ranger::ranger(update(rf_spec, . ~ . + SLD_1 + SLD_2 + SLD_3 + SLD_4 + SLD_5 +
+  all_rf <- ranger::ranger(update(rf_spec, . ~ . + SLD_1 + SLD_2 +
                                       latitude + longitude + submarket),
                              data = train_df,
                              num.trees = ntrees,
@@ -217,66 +216,66 @@ assignBorder <- function(validate_df,
                           spec = rep(c('base', 'subm', 'xy', 'sld', 'sld+subm', 'sld+xy',
                                        'sld + xy + subm')),
                           fit = c(summary(base_lm)$r.squared, summary(subm_lm)$r.squared,
-                                  summary(xy_lm)$r.squared, summary(sld_lm)$r.squared,
+                                  summary(xy_lm)$r.squared, summary(sld5_lm)$r.squared,
                                   summary(slds_lm)$r.squared, summary(sldxy_lm)$r.squared,
                                   summary(all_lm)$r.squared,
                                   base_rf$r.squared, subm_rf$r.squared,
-                                  xy_rf$r.squared, sld_rf$r.squared,
+                                  xy_rf$r.squared, sld5_rf$r.squared,
                                   slds_rf$r.squared, sldxy_rf$r.squared,
                                   all_rf$r.squared),
                           mdape = c(median(abs(validate_df$base_lm_error)),
                                     median(abs(validate_df$subm_lm_error)),
                                     median(abs(validate_df$xy_lm_error)),
-                                    median(abs(validate_df$sld_lm_error)),
+                                    median(abs(validate_df$sld5_lm_error)),
                                     median(abs(validate_df$slds_lm_error)),
                                     median(abs(validate_df$sldxy_lm_error)),
                                     median(abs(validate_df$all_lm_error)),
                                     median(abs(validate_df$base_rf_error)),
                                     median(abs(validate_df$subm_rf_error)),
                                     median(abs(validate_df$xy_rf_error)),
-                                    median(abs(validate_df$sld_rf_error)),
+                                    median(abs(validate_df$sld5_rf_error)),
                                     median(abs(validate_df$slds_rf_error)),
                                     median(abs(validate_df$sldxy_rf_error)),
                                     median(abs(validate_df$all_rf_error))),
                           mdpe = c(median(validate_df$base_lm_error),
                                     median(validate_df$subm_lm_error),
                                     median(validate_df$xy_lm_error),
-                                    median(validate_df$sld_lm_error),
+                                    median(validate_df$sld2_lm_error),
                                     median(validate_df$slds_lm_error),
                                     median(validate_df$sldxy_lm_error),
                                     median(validate_df$all_lm_error),
                                     median(validate_df$base_rf_error),
                                     median(validate_df$subm_rf_error),
                                     median(validate_df$xy_rf_error),
-                                    median(validate_df$sld_rf_error),
+                                    median(validate_df$sld2_rf_error),
                                     median(validate_df$slds_rf_error),
                                     median(validate_df$sldxy_rf_error),
                                     median(validate_df$all_rf_error)),
                           spac = c(spac_$base_lm_error$statistic,
                                    spac_$subm_lm_error$statistic,
                                    spac_$xy_lm_error$statistic,
-                                   spac_$sld_lm_error$statistic,
+                                   spac_$sld2_lm_error$statistic,
                                    spac_$slds_lm_error$statistic,
                                    spac_$sldxy_lm_error$statistic,
                                    spac_$all_lm_error$statistic,
                                    spac_$base_rf_error$statistic,
                                    spac_$subm_rf_error$statistic,
                                    spac_$xy_rf_error$statistic,
-                                   spac_$sld_rf_error$statistic,
+                                   spac_$sld2_rf_error$statistic,
                                    spac_$slds_rf_error$statistic,
                                    spac_$sldxy_rf_error$statistic,
                                    spac_$all_rf_error$statistic),
                           border_mdape = c(median(abs(validate_df$base_lm_error[b_idx])),
                                     median(abs(validate_df$subm_lm_error[b_idx])),
                                     median(abs(validate_df$xy_lm_error[b_idx])),
-                                    median(abs(validate_df$sld_lm_error[b_idx])),
+                                    median(abs(validate_df$sld2_lm_error[b_idx])),
                                     median(abs(validate_df$slds_lm_error[b_idx])),
                                     median(abs(validate_df$sldxy_lm_error[b_idx])),
                                     median(abs(validate_df$all_lm_error[b_idx])),
                                     median(abs(validate_df$base_rf_error[b_idx])),
                                     median(abs(validate_df$subm_rf_error[b_idx])),
                                     median(abs(validate_df$xy_rf_error[b_idx])),
-                                    median(abs(validate_df$sld_rf_error[b_idx])),
+                                    median(abs(validate_df$sld2_rf_error[b_idx])),
                                     median(abs(validate_df$slds_rf_error[b_idx])),
                                     median(abs(validate_df$sldxy_rf_error[b_idx])),
                                     median(abs(validate_df$all_rf_error[b_idx]))))
