@@ -16,8 +16,11 @@
   library(ggpubr)
   theme_set(theme_pubr())
 
+  source(file.path(getwd(), 'functions', 'functions.R'))
+  
   # Read in Data
   sales_df <- readRDS(file.path(getwd(), 'data', paste0('all_sales.rds')))
+  
 
   # Trim to recent years
   sales_df <- sales_df %>%
@@ -207,16 +210,16 @@
   
   
   
-  # Split to Train and Validate
-  val_periods <- 2
-  train_df <- x_df %>%
-    dplyr::filter(trans_period <= max(x_df$trans_period) - val_periods)
-
-  validate_df <- x_df %>%  
-    dplyr::filter(trans_period > max(x_df$trans_period) - val_periods) %>%
-    dplyr::mutate(trans_period = max(train_df$trans_period))
-
-  
+  # # Split to Train and Validate
+  # val_periods <- 2
+  # train_df <- x_df %>%
+  #   dplyr::filter(trans_period <= max(x_df$trans_period) - val_periods)
+  # 
+  # validate_df <- x_df %>%  
+  #   dplyr::filter(trans_period > max(x_df$trans_period) - val_periods) %>%
+  #   dplyr::mutate(trans_period = max(train_df$trans_period))
+  # 
+  # 
 ### Predictive Impact --------------------------------------------------------------------------------
 
   periods <- 205:252
